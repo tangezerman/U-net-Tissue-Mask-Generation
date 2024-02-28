@@ -1,0 +1,18 @@
+WSI Path,XML Path,WSI Name,Folder Name
+D:\AIN3007_project\train_valid_data\Breast2__he\181.mrxs,D:\AIN3007_project\train_valid_data\Breast2__he\181.xml,181,Breast2__he
+D:\AIN3007_project\train_valid_data\Breast2__he\191.mrxs,D:\AIN3007_project\train_valid_data\Breast2__he\191.xml,191,Breast2__he
+D:\AIN3007_project\train_valid_data\Breast2__he\34.mrxs,D:\AIN3007_project\train_valid_data\Breast2__he\34.xml,34,Breast2__he
+D:\AIN3007_project\train_valid_data\Breast2__he\383.mrxs,D:\AIN3007_project\train_valid_data\Breast2__he\383.xml,383,Breast2__he
+D:\AIN3007_project\train_valid_data\Breast1__he\TCGA-BH-A0B5-01Z-00-DX1.svs,D:\AIN3007_project\train_valid_data\Breast1__he\TCGA-BH-A0B5-01Z-00-DX1.xml,TCGA-BH-A0B5-01Z-00-DX1,Breast1__he
+D:\AIN3007_project\train_valid_data\Breast1__he\TCGA-AR-A24K-01Z-00-DX1.svs,D:\AIN3007_project\train_valid_data\Breast1__he\TCGA-AR-A24K-01Z-00-DX1.xml,TCGA-AR-A24K-01Z-00-DX1,Breast1__he
+D:\AIN3007_project\train_valid_data\Breast1__he\TCGA-A7-A13F-01Z-00-DX2.svs,D:\AIN3007_project\train_valid_data\Breast1__he\TCGA-A7-A13F-01Z-00-DX2.xml,TCGA-A7-A13F-01Z-00-DX2,Breast1__he
+D:\AIN3007_project\train_valid_data\Breast1__he\TCGA-AC-A5XS-01Z-00-DX1.svs,D:\AIN3007_project\train_valid_data\Breast1__he\TCGA-AC-A5XS-01Z-00-DX1.xml,TCGA-AC-A5XS-01Z-00-DX1,Breast1__he
+D:\AIN3007_project\train_valid_data\LymphNode1__he\patient_080_node_1.tif,D:\AIN3007_project\train_valid_data\LymphNode1__he\patient_080_node_1.xml,patient_080_node_1,LymphNode1__he
+D:\AIN3007_project\train_valid_data\LymphNode1__he\patient_046_node_0.tif,D:\AIN3007_project\train_valid_data\LymphNode1__he\patient_046_node_0.xml,patient_046_node_0,LymphNode1__he
+D:\AIN3007_project\train_valid_data\LymphNode1__he\patient_020_node_1.tif,D:\AIN3007_project\train_valid_data\LymphNode1__he\patient_020_node_1.xml,patient_020_node_1,LymphNode1__he
+D:\AIN3007_project\train_valid_data\LymphNode1__he\patient_010_node_0.tif,D:\AIN3007_project\train_valid_data\LymphNode1__he\patient_010_node_0.xml,patient_010_node_0,LymphNode1__he
+D:\AIN3007_project\train_valid_data\LymphNode1__he\patient_018_node_0.tif,D:\AIN3007_project\train_valid_data\LymphNode1__he\patient_018_node_0.xml,patient_018_node_0,LymphNode1__he
+D:\AIN3007_project\train_valid_data\Breast3__ihc\36_HER2.ndpi,D:\AIN3007_project\train_valid_data\Breast3__ihc\36_HER2.xml,36_HER2,Breast3__ihc
+D:\AIN3007_project\train_valid_data\Breast3__ihc\67_HER2.ndpi,D:\AIN3007_project\train_valid_data\Breast3__ihc\67_HER2.xml,67_HER2,Breast3__ihc
+D:\AIN3007_project\train_valid_data\Breast3__ihc\29_HER2.ndpi,D:\AIN3007_project\train_valid_data\Breast3__ihc\29_HER2.xml,29_HER2,Breast3__ihc
+D:\AIN3007_project\train_valid_data\Breast3__ihc\34_HER2.ndpi,D:\AIN3007_project\train_valid_data\Breast3__ihc\34_HER2.xml,34_HER2,Breast3__ihc
