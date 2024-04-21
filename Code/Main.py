@@ -9,9 +9,9 @@ import tools
 os.environ["TF_CPP_MIN_LOG_LEVEL"] = "2"
 
 # Define paths and parameters
-model_path = r"D:\U-net-Tissue-Mask-Generation\Models\model__256_16_0"
+model_path = "Models\model__256_16_0"
 external_dataset_path = "Paths\external_data_test.csv"
-export_path = r"D:\U-net-Tissue-Mask-Generation\Export"
+export_path = "Export"
 patch_size = 256
 
 # Load the pre-trained model

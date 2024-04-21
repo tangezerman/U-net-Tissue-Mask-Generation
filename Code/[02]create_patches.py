@@ -1,5 +1,5 @@
 # %% Imports
-OPENSLIDE_PATH = r"C:\Users\tange\Vs Code\16th\openslide-win64-20231011"
+OPENSLIDE_PATH = r"D:\openslide-win64-20231011"
 
 import os
 if hasattr(os, 'add_dll_directory'):
