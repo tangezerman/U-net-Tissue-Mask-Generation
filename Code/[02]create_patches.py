@@ -1,26 +1,25 @@
 # %% Imports
+import csv
+import psutil
+from tqdm import tqdm
+import xml.etree.ElementTree as ET
+import cv2
+import numpy as np
+import os
 OPENSLIDE_PATH = r"D:\openslide-win64-20231011"
 
-import os
 if hasattr(os, 'add_dll_directory'):
     with os.add_dll_directory(OPENSLIDE_PATH):
         import openslide
 else:
     import openslide
- 
-import numpy as np
-import cv2
-import xml.etree.ElementTree as ET
 
-from tqdm import tqdm
-import psutil
-import os
-import csv
 
 # %% Deffinitions
+
 def get_data_list():
     full_data_lists = []
-    for file_name in ["train","val","test"]:
+    for file_name in ["train", "val", "test"]:
         csv_file_path = rf"Paths\split_data_{file_name}.csv"
 
         data_list = []
@@ -33,6 +32,7 @@ def get_data_list():
 
         full_data_lists.append(data_list)
     return full_data_lists
+
 
 def generate_mask(xml, downscale, canvas):
     mask = np.zeros(canvas[::-1], dtype=np.uint8)
@@ -55,31 +55,36 @@ def generate_mask(xml, downscale, canvas):
             pts = pts.reshape((-1, 1, 2))
             cv2.fillPoly(mask, [pts], color=0)
 
-    mask = cv2.resize(mask, dsize=(size, size), interpolation=cv2.INTER_NEAREST)
-    
+    mask = cv2.resize(mask, dsize=(size, size),
+                      interpolation=cv2.INTER_NEAREST)
+
     return mask
+
 
 def generate_img_array(slide, level, canvas):
     img = slide.read_region((0, 0), level, canvas)
     img_arr = np.array(img)[:, :, :3]
-    
-    img_arr = cv2.resize(img_arr, dsize=(size, size), interpolation=cv2.INTER_AREA)
-    
+
+    img_arr = cv2.resize(img_arr, dsize=(size, size),
+                         interpolation=cv2.INTER_AREA)
+
     mask = (img_arr < 5).any(axis=2)
     img_arr[mask] = [255, 255, 255]
 
     return img_arr
 
+
 def not_empty(mask):
     total_pixels = mask.size
     non_empty_pixels = np.count_nonzero(mask)
-    
+
     if non_empty_pixels > 0:
         empty_percentage = (1 - non_empty_pixels / total_pixels) * 100
         return empty_percentage < 99
     else:
         return False
-    
+
+
 def slice(mask, slice_img, folder):
     row_col = size // patch_size
     for row in range(row_col):
@@ -88,40 +93,44 @@ def slice(mask, slice_img, folder):
             end_row = start_row + patch_size
             start_col = col * patch_size
             end_col = start_col + patch_size
-            
+
             cropped_img = slice_img[start_row:end_row, start_col:end_col]
             cropped_mask = mask[start_row:end_row, start_col:end_col]
-            
+
             index_str = f"{index}_{row}_{col}"
-            
+
             if not_empty(cropped_mask):
-                mask_path = os.path.join(main_folder, folder, "masks", f"{index_str}_mask.png")
-                img_path = os.path.join(main_folder, folder, "images", f"{index_str}_slice.png")
-      
+                mask_path = os.path.join(
+                    main_folder, folder, "masks", f"{index_str}_mask.png")
+                img_path = os.path.join(
+                    main_folder, folder, "images", f"{index_str}_slice.png")
+
                 cv2.imwrite(mask_path, cropped_mask)
                 cv2.imwrite(img_path, cropped_img)
+
 
 def parse(file_info, folder):
     global size
     path = file_info[0]
     slide = openslide.OpenSlide(path)
 
-    level = 5 
-    if level > slide.level_count : level = slide.level_count-1
+    level = 5
+    if level > slide.level_count:
+        level = slide.level_count-1
 
     downscale = slide.level_downsamples[level]//1
     canvas = slide.level_dimensions[level]
     size = min(canvas)//patch_size*patch_size
     xml = file_info[1]
 
-    slice_img = generate_img_array(slide,level, canvas)
+    slice_img = generate_img_array(slide, level, canvas)
     mask = generate_mask(xml, downscale, canvas)
-
 
     slice(mask, slice_img, folder)
     return True
 
 # %% RUN
+
 
 patch_size = 256
 version = 0
@@ -139,21 +148,23 @@ process = psutil.Process()
 
 train_files, val_files, test_files = get_data_list()
 for split in [(train_files, "train"), (val_files, "val"), (test_files, "test")]:
-    
+
     os.makedirs(os.path.join(main_folder, split[1], "masks"), exist_ok=True)
     os.makedirs(os.path.join(main_folder, split[1], "images"), exist_ok=True)
-    
-    progress_bar = tqdm(total=len(split[0]), desc="Processing") 
+
+    progress_bar = tqdm(total=len(split[0]), desc="Processing")
     for file in split[0]:
 
-        if index >= limit: break  
-        
+        if index >= limit:
+            break
+
         parse(file, split[1])
 
         progress_bar.update(1)
-        index += 1    
-    
+        index += 1
+
     progress_bar.close()
-    
-    if index >= limit: break  
+
+    if index >= limit:
+        break
 # %%

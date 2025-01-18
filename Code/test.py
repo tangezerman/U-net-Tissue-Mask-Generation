@@ -6,10 +6,13 @@ csv_path = "your_csv_file.csv"  # Update with the path to your CSV file
 df = pd.read_csv(csv_path)
 
 # Function to generate XML paths
+
+
 def generate_xml_path(file_path):
     file_name = os.path.splitext(os.path.basename(file_path))[0]
     xml_path = os.path.join(os.path.dirname(file_path), file_name + ".xml")
     return xml_path
+
 
 # Apply the function to generate XML paths
 df['real_mask_path'] = df['WSI_path'].apply(generate_xml_path)

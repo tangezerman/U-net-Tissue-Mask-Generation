@@ -17,9 +17,11 @@ def gather_file_info(data_folder, extensions):
                     xml_file = wsi_name + ".xml"
                     xml_path = os.path.join(folder_path, xml_file)
                     if os.path.exists(xml_path):
-                        wsi_info_list.append([wsi_path, xml_path, wsi_name, folder_name])
+                        wsi_info_list.append(
+                            [wsi_path, xml_path, wsi_name, folder_name])
 
     return wsi_info_list
+
 
 def split_data(info_list: list):
     split_dict = {"train": [], "val": [], "test": []}
@@ -42,25 +44,29 @@ def split_data(info_list: list):
 
     return split_dict
 
+
 def create_data_list(file_info_list, base_filename):
     csv_filename = rf"Paths\{base_filename}.csv"
     with open(csv_filename, "w", newline="") as csvfile:
         csv_writer = csv.writer(csvfile)
-        csv_writer.writerow(["WSI Path", "XML Path", "WSI Name", "Folder Name"])
+        csv_writer.writerow(
+            ["WSI Path", "XML Path", "WSI Name", "Folder Name"])
         csv_writer.writerows(file_info_list)
+
 
 def create_split_csv(split_dict, base_filename):
     for split_type, split_files in split_dict.items():
         csv_filename = rf"Paths\{base_filename}_{split_type}.csv"
         with open(csv_filename, "w", newline="") as csvfile:
             csv_writer = csv.writer(csvfile)
-            csv_writer.writerow(["WSI Path", "XML Path", "WSI Name", "Folder Name"])
+            csv_writer.writerow(
+                ["WSI Path", "XML Path", "WSI Name", "Folder Name"])
             csv_writer.writerows(split_files)
 
-   
+
 if __name__ == "__main__":
     random.seed(41)
-    
+
     data_folder = r"E:\temp_data\AIN3007_project\train_valid_data"
     extensions = [".svs", ".mrxs", ".ndpi", ".tif", ".tiff"]
 
@@ -69,4 +75,3 @@ if __name__ == "__main__":
 
     create_data_list(file_info_list, "full_data")
     create_split_csv(split_dict, "split_data")
-
