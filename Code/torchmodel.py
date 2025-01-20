@@ -8,6 +8,36 @@ import os
 from typing import Tuple
 
 
+class DoubleConv(nn.Module):
+    def __init__(self, in_channels: int, out_channels: int):
+        super(DoubleConv, self).__init__()
+        self.double_conv = nn.Sequential(
+            nn.Conv2d(in_channels, out_channels, kernel_size=3, padding=1),
+            nn.BatchNorm2d(out_channels),
+            nn.ReLU(inplace=True),
+            nn.Conv2d(out_channels, out_channels, kernel_size=3, padding=1),
+            nn.BatchNorm2d(out_channels),
+            nn.ReLU(inplace=True)
+        )
+
+    def forward(self, x):
+        return self.double_conv(x)
+
+
+class UpConv(nn.Module):
+    def __init__(self, in_channels: int, out_channels: int):
+        super(UpConv, self).__init__()
+        self.up_conv = nn.Sequential(
+            nn.ConvTranspose2d(in_channels, out_channels,
+                               kernel_size=2, stride=2),
+            nn.BatchNorm2d(out_channels),
+            nn.ReLU(inplace=True)
+        )
+
+    def forward(self, x):
+        return self.up_conv(x)
+
+
 class TLUNet(nn.Module):
     def __init__(self, input_shape: Tuple[int, int, int], patch_size: int):
         super(TLUNet, self).__init__()
@@ -42,114 +72,54 @@ class TLUNet(nn.Module):
         self.block5 = nn.Sequential(
             *list(base_vgg.features.children())[24:31])  # 16->8
 
-        # Decoder layers with careful dimension handling
-        # Each upconv doubles spatial dimensions while reducing channels
-        self.upconv1 = nn.Sequential(
-            nn.ConvTranspose2d(512, 512, kernel_size=2, stride=2),  # 8->16
-            nn.BatchNorm2d(512),
-            nn.ReLU(inplace=True)
-        )
+        # Decoder path with reusable components
+        self.upconv1 = UpConv(512, 512)  # 8->16
+        self.conv6 = DoubleConv(1024, 512)  # After concatenation
 
-        self.conv6 = nn.Sequential(
-            # Concat gives us 1024 channels
-            nn.Conv2d(1024, 512, kernel_size=3, padding=1),
-            nn.BatchNorm2d(512),
-            nn.ReLU(inplace=True),
-            nn.Conv2d(512, 512, kernel_size=3, padding=1),
-            nn.BatchNorm2d(512),
-            nn.ReLU(inplace=True)
-        )
+        self.upconv2 = UpConv(512, 256)  # 16->32
+        self.conv7 = DoubleConv(512, 256)
 
-        self.upconv2 = nn.Sequential(
-            nn.ConvTranspose2d(512, 256, kernel_size=2, stride=2),  # 16->32
-            nn.BatchNorm2d(256),
-            nn.ReLU(inplace=True)
-        )
+        self.upconv3 = UpConv(256, 128)  # 32->64
+        self.conv8 = DoubleConv(256, 128)
 
-        self.conv7 = nn.Sequential(
-            nn.Conv2d(512, 256, kernel_size=3, padding=1),
-            nn.BatchNorm2d(256),
-            nn.ReLU(inplace=True),
-            nn.Conv2d(256, 256, kernel_size=3, padding=1),
-            nn.BatchNorm2d(256),
-            nn.ReLU(inplace=True)
-        )
+        self.upconv4 = UpConv(128, 64)  # 64->128
+        self.conv9 = DoubleConv(128, 64)
 
-        self.upconv3 = nn.Sequential(
-            nn.ConvTranspose2d(256, 128, kernel_size=2, stride=2),  # 32->64
-            nn.BatchNorm2d(128),
-            nn.ReLU(inplace=True)
-        )
-
-        self.conv8 = nn.Sequential(
-            nn.Conv2d(256, 128, kernel_size=3, padding=1),
-            nn.BatchNorm2d(128),
-            nn.ReLU(inplace=True),
-            nn.Conv2d(128, 128, kernel_size=3, padding=1),
-            nn.BatchNorm2d(128),
-            nn.ReLU(inplace=True)
-        )
-
-        self.upconv4 = nn.Sequential(
-            nn.ConvTranspose2d(128, 64, kernel_size=2, stride=2),  # 64->128
-            nn.BatchNorm2d(64),
-            nn.ReLU(inplace=True)
-        )
-
-        self.conv9 = nn.Sequential(
-            nn.Conv2d(128, 64, kernel_size=3, padding=1),
-            nn.BatchNorm2d(64),
-            nn.ReLU(inplace=True),
-            nn.Conv2d(64, 64, kernel_size=3, padding=1),
-            nn.BatchNorm2d(64),
-            nn.ReLU(inplace=True)
-        )
-
-        # Final upsampling to match input dimensions
-        self.upconv_final = nn.Sequential(
-            nn.ConvTranspose2d(64, 32, kernel_size=2, stride=2),  # 128->256
-            nn.BatchNorm2d(32),
-            nn.ReLU(inplace=True)
-        )
-
+        # Final upsampling and convolution
+        self.upconv_final = UpConv(64, 32)  # 128->256
         self.final_conv = nn.Sequential(
             nn.Conv2d(32, 1, kernel_size=3, padding=1),
             nn.Sigmoid()
         )
 
-    def _debug_shape(self, x: torch.Tensor, name: str):
-        """Helper function to debug tensor shapes during forward pass"""
-        print(f"{name} shape: {x.shape}")
-        return x
-
     def forward(self, x):
-        # Encoder path
-        block1_out = self.block1(x)           # 256->128
-        block2_out = self.block2(block1_out)  # 128->64
-        block3_out = self.block3(block2_out)  # 64->32
-        block4_out = self.block4(block3_out)  # 32->16
-        block5_out = self.block5(block4_out)  # 16->8
+        # Encoder path with skip connections
+        e1 = self.block1(x)
+        e2 = self.block2(e1)
+        e3 = self.block3(e2)
+        e4 = self.block4(e3)
+        e5 = self.block5(e4)
 
-        # Decoder path with careful dimension tracking
-        up1 = self.upconv1(block5_out)        # 8->16
-        merge1 = torch.cat([up1, block4_out], dim=1)
-        conv6 = self.conv6(merge1)
+        # Decoder path with skip connections
+        d1 = self.upconv1(e5)
+        d1 = torch.cat([d1, e4], dim=1)
+        d1 = self.conv6(d1)
 
-        up2 = self.upconv2(conv6)             # 16->32
-        merge2 = torch.cat([up2, block3_out], dim=1)
-        conv7 = self.conv7(merge2)
+        d2 = self.upconv2(d1)
+        d2 = torch.cat([d2, e3], dim=1)
+        d2 = self.conv7(d2)
 
-        up3 = self.upconv3(conv7)             # 32->64
-        merge3 = torch.cat([up3, block2_out], dim=1)
-        conv8 = self.conv8(merge3)
+        d3 = self.upconv3(d2)
+        d3 = torch.cat([d3, e2], dim=1)
+        d3 = self.conv8(d3)
 
-        up4 = self.upconv4(conv8)             # 64->128
-        merge4 = torch.cat([up4, block1_out], dim=1)
-        conv9 = self.conv9(merge4)
+        d4 = self.upconv4(d3)
+        d4 = torch.cat([d4, e1], dim=1)
+        d4 = self.conv9(d4)
 
-        # Final upsampling to match input dimensions
-        up_final = self.upconv_final(conv9)   # 128->256
-        out = self.final_conv(up_final)
+        # Final upsampling and convolution
+        out = self.upconv_final(d4)
+        out = self.final_conv(out)
 
         return out
 
