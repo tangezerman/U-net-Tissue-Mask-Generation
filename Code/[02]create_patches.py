@@ -6,6 +6,7 @@ import xml.etree.ElementTree as ET
 import cv2
 import numpy as np
 import os
+import threading
 OPENSLIDE_PATH = r"D:\openslide-win64-20231011"
 
 if hasattr(os, 'add_dll_directory'):
@@ -20,7 +21,7 @@ else:
 def get_data_list():
     full_data_lists = []
     for file_name in ["train", "val", "test"]:
-        csv_file_path = rf"Paths\split_data_{file_name}.csv"
+        csv_file_path = rf"C:\Users\tange\vscode\U-net-Tissue-Mask-Generation\Paths\split_data_{file_name}.csv"
 
         data_list = []
         with open(csv_file_path, 'r') as csvfile:
@@ -110,24 +111,47 @@ def slice(mask, slice_img, folder):
 
 
 def parse(file_info, folder):
-    global size
-    path = file_info[0]
-    slide = openslide.OpenSlide(path)
+    """
+    Parse slide image and generate patches with masks.
+    Returns True if successful, False if file is unsupported or missing.
 
-    level = 5
-    if level > slide.level_count:
-        level = slide.level_count-1
+    Parameters:
+    file_info (list): Contains path to slide and XML annotation
+    folder (str): Output folder name for the patches
+    """
+    try:
+        global size
+        path = file_info[0]
+        slide = openslide.OpenSlide(path)
 
-    downscale = slide.level_downsamples[level]//1
-    canvas = slide.level_dimensions[level]
-    size = min(canvas)//patch_size*patch_size
-    xml = file_info[1]
+        level = 5
+        if level > slide.level_count:
+            level = slide.level_count-1
 
-    slice_img = generate_img_array(slide, level, canvas)
-    mask = generate_mask(xml, downscale, canvas)
+        downscale = slide.level_downsamples[level]//1
+        canvas = slide.level_dimensions[level]
+        size = min(canvas)//patch_size*patch_size
+        xml = file_info[1]
 
-    slice(mask, slice_img, folder)
-    return True
+        slice_img = generate_img_array(slide, level, canvas)
+        mask = generate_mask(xml, downscale, canvas)
+
+        slice(mask, slice_img, folder)
+        return True
+
+    except openslide.OpenSlideUnsupportedFormatError:
+        print(f"Skipping unsupported file: {path}")
+        return False
+    except Exception as e:
+        print(f"Error processing file {path}: {str(e)}")
+        return False
+    finally:
+        # Ensure slide is properly closed even if an error occurs
+        if 'slide' in locals():
+            try:
+                slide.close()
+            except:
+                pass
 
 # %% RUN
 
@@ -152,18 +176,24 @@ for split in [(train_files, "train"), (val_files, "val"), (test_files, "test")]:
     os.makedirs(os.path.join(main_folder, split[1], "masks"), exist_ok=True)
     os.makedirs(os.path.join(main_folder, split[1], "images"), exist_ok=True)
 
-    progress_bar = tqdm(total=len(split[0]), desc="Processing")
-    for file in split[0]:
+    progress_bar = tqdm(total=len(split[0]),
+                        desc=f"Processing {split[1]} files")
+    skipped_files = 0
 
+    for file in split[0]:
         if index >= limit:
             break
 
-        parse(file, split[1])
+        success = parse(file, split[1])
+        if not success:
+            skipped_files += 1
+        else:
+            index += 1
 
         progress_bar.update(1)
-        index += 1
 
     progress_bar.close()
+    print(f"Completed {split[1]} split. Skipped {skipped_files} files.")
 
     if index >= limit:
         break
