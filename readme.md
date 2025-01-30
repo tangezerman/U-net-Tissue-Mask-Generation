@@ -4,3 +4,5 @@ The model was trained using a private dataset that was provided to students in t
 The model architecture uses weights of VGG 16 trained on IMAGENET. 
 
 The trained model is under Models directory. You can extract it into the same directory for testing purposes.
+
+When creating patches, `multithreaded_patches.py` utilizes concurrency to dramatically speed up the process by x100 
