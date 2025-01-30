@@ -7,6 +7,7 @@ import numpy as np
 import os
 from concurrent.futures import ProcessPoolExecutor, as_completed
 from multiprocessing import Manager
+
 OPENSLIDE_PATH = r"D:\openslide-win64-20231011"
 
 if hasattr(os, 'add_dll_directory'):
@@ -108,7 +109,7 @@ def slice(mask, slice_img, folder):
                 cv2.imwrite(img_path, cropped_img)
 
 
-def parse(file_info, folder, shared_index):
+def parse(file_info, folder, shared_index, skipped_files):
     """
     Parse slide image and generate patches with masks.
     Returns True if successful, False if file is unsupported or missing.
@@ -117,6 +118,7 @@ def parse(file_info, folder, shared_index):
     file_info (list): Contains path to slide and XML annotation
     folder (str): Output folder name for the patches
     shared_index (Manager.Value): Shared index counter
+    skipped_files (Manager.list): Shared list to store skipped files
     """
     try:
         global size
@@ -139,10 +141,10 @@ def parse(file_info, folder, shared_index):
         return True
 
     except openslide.OpenSlideUnsupportedFormatError:
-        print(f"Skipping unsupported file: {path}")
+        skipped_files.append((path, "Unsupported format"))
         return False
     except Exception as e:
-        print(f"Error processing file {path}: {str(e)}")
+        skipped_files.append((path, str(e)))
         return False
     finally:
         # Ensure slide is properly closed even if an error occurs
@@ -153,12 +155,12 @@ def parse(file_info, folder, shared_index):
                 pass
 
 
-def process_split(split_files, split_name, shared_index):
+def process_split(split_files, split_name, shared_index, skipped_files):
     os.makedirs(os.path.join(main_folder, split_name, "masks"), exist_ok=True)
     os.makedirs(os.path.join(main_folder, split_name, "images"), exist_ok=True)
 
     progress_bar = tqdm(total=len(split_files), desc=f"Processing {split_name} files")
-    skipped_files = 0
+    skipped_count = 0
 
     with ProcessPoolExecutor(max_workers=8) as executor:  # Adjust max_workers based on your CPU cores
         futures = []
@@ -166,12 +168,12 @@ def process_split(split_files, split_name, shared_index):
             if shared_index.value >= limit:
                 break
 
-            futures.append(executor.submit(parse, file, split_name, shared_index))
+            futures.append(executor.submit(parse, file, split_name, shared_index, skipped_files))
 
         for future in as_completed(futures):
             success = future.result()
             if not success:
-                skipped_files += 1
+                skipped_count += 1
             else:
                 with shared_index.get_lock():
                     shared_index.value += 1
@@ -179,7 +181,7 @@ def process_split(split_files, split_name, shared_index):
             progress_bar.update(1)
 
     progress_bar.close()
-    print(f"Completed {split_name} split. Skipped {skipped_files} files.")
+    print(f"Completed {split_name} split. Skipped {skipped_count} files.")
 
 
 if __name__ == "__main__":
@@ -201,11 +203,22 @@ if __name__ == "__main__":
     # Get data lists for all splits
     train_files, val_files, test_files = get_data_list()
 
-    # Create shared index using multiprocessing Manager
+    # Create shared index and skipped files list using multiprocessing Manager
     manager = Manager()
     shared_index = manager.Value('i', 0)
+    skipped_files = manager.list()
 
     # Process each split
-    process_split(train_files, "train", shared_index)
-    process_split(val_files, "val", shared_index)
-    process_split(test_files, "test", shared_index)
+    process_split(train_files, "train", shared_index, skipped_files)
+    process_split(val_files, "val", shared_index, skipped_files)
+    process_split(test_files, "test", shared_index, skipped_files)
+
+    # Print skipped files after all progress bars are complete
+    if skipped_files:
+        print("\n" + "---" * 20)
+        print("Skipped files:")
+        for file_path, reason in skipped_files:
+            print(f"File: {file_path}, Reason: {reason}")
+        print("---" * 20)
+    else:
+        print("\nNo files were skipped.")
