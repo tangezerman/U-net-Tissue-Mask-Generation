@@ -10,12 +10,23 @@ from multiprocessing import Manager
 
 OPENSLIDE_PATH = r"D:\openslide-win64-20231011"
 
+patch_size = 256
+version = 0
+limit = 10000
+
+main_folder = rf"Data\Data_{patch_size}_{version}"
+
+# Create necessary directories
+os.makedirs(os.path.join(main_folder), exist_ok=True)
+os.makedirs(os.path.join(main_folder, "trash"), exist_ok=True)
+os.makedirs(os.path.join(main_folder, "trash", "masks"), exist_ok=True)
+os.makedirs(os.path.join(main_folder, "trash", "images"), exist_ok=True)
+
 if hasattr(os, 'add_dll_directory'):
     with os.add_dll_directory(OPENSLIDE_PATH):
         import openslide
 else:
     import openslide
-
 
 def get_data_list():
     full_data_lists = []
@@ -33,8 +44,7 @@ def get_data_list():
         full_data_lists.append(data_list)
     return full_data_lists
 
-
-def generate_mask(xml, downscale, canvas):
+def generate_mask(xml, downscale, canvas, size):
     mask = np.zeros(canvas[::-1], dtype=np.uint8)
     tree = ET.parse(xml)
     root = tree.getroot()
@@ -55,24 +65,19 @@ def generate_mask(xml, downscale, canvas):
             pts = pts.reshape((-1, 1, 2))
             cv2.fillPoly(mask, [pts], color=0)
 
-    mask = cv2.resize(mask, dsize=(size, size),
-                      interpolation=cv2.INTER_NEAREST)
-
+    mask = cv2.resize(mask, dsize=(size, size), interpolation=cv2.INTER_NEAREST)
     return mask
 
-
-def generate_img_array(slide, level, canvas):
+def generate_img_array(slide, level, canvas, size):
     img = slide.read_region((0, 0), level, canvas)
     img_arr = np.array(img)[:, :, :3]
 
-    img_arr = cv2.resize(img_arr, dsize=(size, size),
-                         interpolation=cv2.INTER_AREA)
+    img_arr = cv2.resize(img_arr, dsize=(size, size), interpolation=cv2.INTER_AREA)
 
     mask = (img_arr < 5).any(axis=2)
     img_arr[mask] = [255, 255, 255]
 
     return img_arr
-
 
 def not_empty(mask):
     total_pixels = mask.size
@@ -84,9 +89,8 @@ def not_empty(mask):
     else:
         return False
 
-
-def slice(mask, slice_img, folder):
-    row_col = size // patch_size
+def slice(mask, slice_img, folder, index, patch_size):
+    row_col = mask.shape[0] // patch_size
     for row in range(row_col):
         for col in range(row_col):
             start_row = row * patch_size
@@ -100,28 +104,14 @@ def slice(mask, slice_img, folder):
             index_str = f"{index}_{row}_{col}"
 
             if not_empty(cropped_mask):
-                mask_path = os.path.join(
-                    main_folder, folder, "masks", f"{index_str}_mask.png")
-                img_path = os.path.join(
-                    main_folder, folder, "images", f"{index_str}_slice.png")
+                mask_path = os.path.join(main_folder, folder, "masks", f"{index_str}_mask.png")
+                img_path = os.path.join(main_folder, folder, "images", f"{index_str}_slice.png")
 
                 cv2.imwrite(mask_path, cropped_mask)
                 cv2.imwrite(img_path, cropped_img)
 
-
-def parse(file_info, folder, shared_index, skipped_files):
-    """
-    Parse slide image and generate patches with masks.
-    Returns True if successful, False if file is unsupported or missing.
-
-    Parameters:
-    file_info (list): Contains path to slide and XML annotation
-    folder (str): Output folder name for the patches
-    shared_index (Manager.Value): Shared index counter
-    skipped_files (Manager.list): Shared list to store skipped files
-    """
+def parse(file_info, folder, shared_index, skipped_files, patch_size):
     try:
-        global size
         path = file_info[0]
         slide = openslide.OpenSlide(path)
 
@@ -134,10 +124,10 @@ def parse(file_info, folder, shared_index, skipped_files):
         size = min(canvas) // patch_size * patch_size
         xml = file_info[1]
 
-        slice_img = generate_img_array(slide, level, canvas)
-        mask = generate_mask(xml, downscale, canvas)
+        slice_img = generate_img_array(slide, level, canvas, size)
+        mask = generate_mask(xml, downscale, canvas, size)
 
-        slice(mask, slice_img, folder)
+        slice(mask, slice_img, folder, shared_index.value, patch_size)
         return True
 
     except openslide.OpenSlideUnsupportedFormatError:
@@ -147,73 +137,52 @@ def parse(file_info, folder, shared_index, skipped_files):
         skipped_files.append((path, str(e)))
         return False
     finally:
-        # Ensure slide is properly closed even if an error occurs
         if 'slide' in locals():
             try:
                 slide.close()
             except:
                 pass
 
-
-def process_split(split_files, split_name, shared_index, skipped_files):
+def process_split(split_files, split_name, shared_index, skipped_files, patch_size):
     os.makedirs(os.path.join(main_folder, split_name, "masks"), exist_ok=True)
     os.makedirs(os.path.join(main_folder, split_name, "images"), exist_ok=True)
 
     progress_bar = tqdm(total=len(split_files), desc=f"Processing {split_name} files")
     skipped_count = 0
 
-    with ProcessPoolExecutor(max_workers=8) as executor:  # Adjust max_workers based on your CPU cores
+    with ProcessPoolExecutor(max_workers=4) as executor:
         futures = []
         for file in split_files:
             if shared_index.value >= limit:
                 break
 
-            futures.append(executor.submit(parse, file, split_name, shared_index, skipped_files))
+            futures.append(executor.submit(parse, file, split_name, shared_index, skipped_files, patch_size))
 
         for future in as_completed(futures):
             success = future.result()
             if not success:
                 skipped_count += 1
             else:
-                with shared_index.get_lock():
-                    shared_index.value += 1
+                shared_index.value += 1
 
             progress_bar.update(1)
 
     progress_bar.close()
     print(f"Completed {split_name} split. Skipped {skipped_count} files.")
 
-
 if __name__ == "__main__":
-    # Initialize parameters
-    patch_size = 256
-    version = 0
-    limit = 1000
-
-    main_folder = rf"Data\Data_{patch_size}_{version}"
-
-    # Create necessary directories
-    os.makedirs(os.path.join(main_folder), exist_ok=True)
-    os.makedirs(os.path.join(main_folder, "trash"), exist_ok=True)
-    os.makedirs(os.path.join(main_folder, "trash", "masks"), exist_ok=True)
-    os.makedirs(os.path.join(main_folder, "trash", "images"), exist_ok=True)
-
     process = psutil.Process()
 
-    # Get data lists for all splits
     train_files, val_files, test_files = get_data_list()
 
-    # Create shared index and skipped files list using multiprocessing Manager
     manager = Manager()
     shared_index = manager.Value('i', 0)
     skipped_files = manager.list()
 
-    # Process each split
-    process_split(train_files, "train", shared_index, skipped_files)
-    process_split(val_files, "val", shared_index, skipped_files)
-    process_split(test_files, "test", shared_index, skipped_files)
+    process_split(train_files, "train", shared_index, skipped_files, patch_size)
+    process_split(val_files, "val", shared_index, skipped_files, patch_size)
+    process_split(test_files, "test", shared_index, skipped_files, patch_size)
 
-    # Print skipped files after all progress bars are complete
     if skipped_files:
         print("\n" + "---" * 20)
         print("Skipped files:")
