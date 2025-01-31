@@ -5,6 +5,8 @@ import xml.etree.ElementTree as ET
 import cv2
 import numpy as np
 import os
+import tempfile
+import shutil
 from concurrent.futures import ProcessPoolExecutor, as_completed
 from multiprocessing import Manager
 
@@ -91,6 +93,8 @@ def not_empty(mask):
 
 def slice(mask, slice_img, folder, index, patch_size):
     row_col = mask.shape[0] // patch_size
+    results = []  # List to store results for each patch
+
     for row in range(row_col):
         for col in range(row_col):
             start_row = row * patch_size
@@ -104,13 +108,21 @@ def slice(mask, slice_img, folder, index, patch_size):
             index_str = f"{index}_{row}_{col}"
 
             if not_empty(cropped_mask):
+                # Prepare the data to be returned
                 mask_path = os.path.join(main_folder, folder, "masks", f"{index_str}_mask.png")
                 img_path = os.path.join(main_folder, folder, "images", f"{index_str}_slice.png")
+                results.append((cropped_mask, cropped_img, mask_path, img_path))
 
-                cv2.imwrite(mask_path, cropped_mask)
-                cv2.imwrite(img_path, cropped_img)
+    return results
 
-def parse(file_info, folder, shared_index, skipped_files, patch_size):
+def save_image_atomically(image, path, lock):
+    with lock:
+        with tempfile.NamedTemporaryFile(delete=False, suffix=".png", dir=os.path.dirname(path)) as tmp_file:
+            tmp_path = tmp_file.name
+            cv2.imwrite(tmp_path, image)
+        shutil.move(tmp_path, path)
+
+def parse(file_info, folder, index, patch_size, lock):
     try:
         path = file_info[0]
         slide = openslide.OpenSlide(path)
@@ -127,14 +139,20 @@ def parse(file_info, folder, shared_index, skipped_files, patch_size):
         slice_img = generate_img_array(slide, level, canvas, size)
         mask = generate_mask(xml, downscale, canvas, size)
 
-        slice(mask, slice_img, folder, shared_index.value, patch_size)
+        # Get the results from slice
+        results = slice(mask, slice_img, folder, index, patch_size)
+
+        # Write files using the results
+        for cropped_mask, cropped_img, mask_path, img_path in results:
+            save_image_atomically(cropped_mask, mask_path, lock)
+            save_image_atomically(cropped_img, img_path, lock)
+
         return True
 
     except openslide.OpenSlideUnsupportedFormatError:
-        skipped_files.append((path, "Unsupported format"))
         return False
     except Exception as e:
-        skipped_files.append((path, str(e)))
+        print(f"Error processing file {file_info[0]}: {e}")
         return False
     finally:
         if 'slide' in locals():
@@ -143,20 +161,20 @@ def parse(file_info, folder, shared_index, skipped_files, patch_size):
             except:
                 pass
 
-def process_split(split_files, split_name, shared_index, skipped_files, patch_size):
+def process_split(split_files, split_name, shared_index, skipped_files, patch_size, lock):
     os.makedirs(os.path.join(main_folder, split_name, "masks"), exist_ok=True)
     os.makedirs(os.path.join(main_folder, split_name, "images"), exist_ok=True)
 
     progress_bar = tqdm(total=len(split_files), desc=f"Processing {split_name} files")
     skipped_count = 0
 
-    with ProcessPoolExecutor(max_workers=4) as executor:
+    with ProcessPoolExecutor(max_workers=8) as executor:
         futures = []
         for file in split_files:
             if shared_index.value >= limit:
                 break
 
-            futures.append(executor.submit(parse, file, split_name, shared_index, skipped_files, patch_size))
+            futures.append(executor.submit(parse, file, split_name, shared_index.value, patch_size, lock))
 
         for future in as_completed(futures):
             success = future.result()
@@ -178,10 +196,11 @@ if __name__ == "__main__":
     manager = Manager()
     shared_index = manager.Value('i', 0)
     skipped_files = manager.list()
+    lock = manager.Lock()  # Create a shared lock using Manager
 
-    process_split(train_files, "train", shared_index, skipped_files, patch_size)
-    process_split(val_files, "val", shared_index, skipped_files, patch_size)
-    process_split(test_files, "test", shared_index, skipped_files, patch_size)
+    process_split(train_files, "train", shared_index, skipped_files, patch_size, lock)
+    process_split(val_files, "val", shared_index, skipped_files, patch_size, lock)
+    process_split(test_files, "test", shared_index, skipped_files, patch_size, lock)
 
     if skipped_files:
         print("\n" + "---" * 20)
