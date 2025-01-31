@@ -263,15 +263,22 @@ def test_model(model: nn.Module, test_loader: DataLoader, device: torch.device) 
     print(f"Test Loss: {avg_loss:.4f}")
     return avg_loss
 
-
+def get_hw():
+    device = "cpu"
+    if torch.cuda.is_available():
+        device = "cuda"
+    if torch.backends.mps.is_available() and torch.backends.mps.is_built():
+        device = "mps"
+    return device
 # Usage example:
 if __name__ == "__main__":
+    hw = get_hw()
     # Parameters
     patch_size = 256
     version = 0
     batch_size = 16
     num_epochs = 10
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    device = torch.device(hw)
 
     # Paths
     path = f"Data/Data_{patch_size}_{version}"
