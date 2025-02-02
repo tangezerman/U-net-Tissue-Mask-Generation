@@ -267,16 +267,18 @@ def get_hw():
     device = "cpu"
     if torch.cuda.is_available():
         device = "cuda"
-    if torch.backends.mps.is_available() and torch.backends.mps.is_built():
+    elif torch.backends.mps.is_available() and torch.backends.mps.is_built():
         device = "mps"
     return device
+
+
 # Usage example:
 if __name__ == "__main__":
     hw = get_hw()
     # Parameters
     patch_size = 256
     version = 0
-    batch_size = 16
+    batch_size = 32
     num_epochs = 10
     device = torch.device(hw)
 
