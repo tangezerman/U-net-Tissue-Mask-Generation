@@ -14,7 +14,7 @@ OPENSLIDE_PATH = r"D:\openslide-win64-20231011"
 
 patch_size = 256
 version = 0
-limit = 10000
+limit = 1000
 
 main_folder = rf"Data\Data_{patch_size}_{version}"
 
@@ -168,21 +168,23 @@ def process_split(split_files, split_name, shared_index, skipped_files, patch_si
     progress_bar = tqdm(total=len(split_files), desc=f"Processing {split_name} files")
     skipped_count = 0
 
+    # Pre-filter files based on limit
+    with lock:
+        current_index = shared_index.value
+        files_to_process = split_files[:limit - current_index]
+
     with ProcessPoolExecutor(max_workers=8) as executor:
         futures = []
-        for file in split_files:
-            if shared_index.value >= limit:
-                break
-
-            futures.append(executor.submit(parse, file, split_name, shared_index.value, patch_size, lock))
+        for i, file in enumerate(files_to_process):
+            futures.append(executor.submit(parse, file, split_name, current_index + i, patch_size, lock))
 
         for future in as_completed(futures):
             success = future.result()
             if not success:
                 skipped_count += 1
             else:
-                shared_index.value += 1
-
+                with lock:
+                    shared_index.value += 1
             progress_bar.update(1)
 
     progress_bar.close()
