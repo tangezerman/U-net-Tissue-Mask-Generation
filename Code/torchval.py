@@ -8,6 +8,25 @@ import matplotlib.pyplot as plt
 from torchmodel import DiceLoss, ImageMaskDataset, TLUNet, DiceLoss, get_hw
 
 
+def calculate_iou(predictions: np.ndarray, ground_truth: np.ndarray, threshold: float = 0.5) -> float:
+    """
+    Calculate Intersection over Union
+    """
+    # Convert to binary masks
+    pred_mask = (predictions > threshold).astype(np.float32)
+    true_mask = (ground_truth > threshold).astype(np.float32)
+    
+    # Calculate intersection and union
+    intersection = np.logical_and(pred_mask, true_mask).sum()
+    union = np.logical_or(pred_mask, true_mask).sum()
+    
+    # Avoid division by zero
+    if union == 0:
+        return 0.0
+    
+    return intersection / union
+
+
 def evaluate_model(model: nn.Module,
                    test_loader: DataLoader,
                    device: torch.device) -> Dict[str, float]:
@@ -17,6 +36,7 @@ def evaluate_model(model: nn.Module,
     model.eval()
     total_dice = 0.0
     total_bce = 0.0
+    total_iou = 0.0
     total_batches = len(test_loader)
 
     dice_criterion = DiceLoss()
@@ -34,16 +54,24 @@ def evaluate_model(model: nn.Module,
             dice_loss = dice_criterion(outputs, masks)
             bce_loss = bce_criterion(outputs, masks)
 
+            # Store predictions and ground truth for additional analysis
+            batch_preds = outputs.cpu().numpy()
+            batch_truth = masks.cpu().numpy()
+            
+            # Calculate IoU for current batch
+            batch_iou = calculate_iou(batch_preds, batch_truth)
+            total_iou += batch_iou
+
             total_dice += (1 - dice_loss.item())  # Convert loss to score
             total_bce += bce_loss.item()
 
-            # Store predictions and ground truth for additional analysis
-            predictions.extend(outputs.cpu().numpy())
-            ground_truth.extend(masks.cpu().numpy())
+            predictions.extend(batch_preds)
+            ground_truth.extend(batch_truth)
 
     # Calculate average metrics
     avg_dice_score = total_dice / total_batches
     avg_bce_loss = total_bce / total_batches
+    avg_iou = total_iou / total_batches
 
     # Calculate additional metrics
     predictions = np.array(predictions)
@@ -58,7 +86,8 @@ def evaluate_model(model: nn.Module,
     metrics = {
         'dice_score': avg_dice_score,
         'bce_loss': avg_bce_loss,
-        'pixel_accuracy': pixel_accuracy
+        'pixel_accuracy': pixel_accuracy,
+        'iou_score': avg_iou
     }
 
     return metrics
@@ -102,7 +131,7 @@ def plot_sample_predictions(model: nn.Module,
 
             # Predicted mask
             axes[i, 2].imshow(predictions[i, 0], cmap='gray')
-            axes[i, 2].set_title('Prediction')
+            axes[i, 2].set_title(f'Prediction\nIoU: {calculate_iou(predictions[i:i+1], masks[i:i+1]):.3f}')
             axes[i, 2].axis('off')
 
         plt.tight_layout()
