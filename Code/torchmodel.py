@@ -6,7 +6,8 @@ from torchvision import models
 import cv2
 import os
 from typing import Tuple
-
+import matplotlib.pyplot as plt
+import numpy as np
 
 class DoubleConv(nn.Module):
     def __init__(self, in_channels: int, out_channels: int):
@@ -271,6 +272,77 @@ def get_hw():
         device = "mps"
     return device
 
+def plot_training_history(history, save_path=None, show_plot=True):
+    """
+    Plot training metrics from model history.
+    
+    Args:
+        history (dict): Dictionary containing 'train_loss', 'val_loss', and 'batch_losses'
+        save_path (str, optional): Path to save the plot. Defaults to None.
+        show_plot (bool, optional): Whether to display the plot. Defaults to True.
+    """
+    # Create figure with subplots
+    fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(12, 10))
+    fig.suptitle('Training History', fontsize=16)
+    
+    # Plot epoch-wise losses
+    epochs = range(1, len(history['train_loss']) + 1)
+    
+    # Top subplot: Training and validation loss per epoch
+    ax1.plot(epochs, history['train_loss'], 'b-', label='Training Loss')
+    ax1.plot(epochs, history['val_loss'], 'r-', label='Validation Loss')
+    ax1.set_title('Epoch-wise Training and Validation Loss')
+    ax1.set_xlabel('Epoch')
+    ax1.set_ylabel('Loss')
+    ax1.grid(True)
+    ax1.legend()
+    
+    # Bottom subplot: Batch losses
+    batches = range(1, len(history['batch_losses']) + 1)
+    ax2.plot(batches, history['batch_losses'], 'g-', alpha=0.5, label='Batch Loss')
+    
+    # Add moving average line for batch losses
+    window_size = min(100, len(history['batch_losses']) // 10)  # Adaptive window size
+    if window_size > 1:
+        moving_avg = np.convolve(history['batch_losses'], 
+                               np.ones(window_size)/window_size, 
+                               mode='valid')
+        ax2.plot(range(window_size, len(batches) + 1), 
+                moving_avg, 
+                'r-', 
+                label=f'Moving Average (window={window_size})')
+    
+    ax2.set_title('Batch-wise Training Loss')
+    ax2.set_xlabel('Batch')
+    ax2.set_ylabel('Loss')
+    ax2.grid(True)
+    ax2.legend()
+    
+    # Add summary statistics as text
+    stats_text = (
+        f"Final Training Loss: {history['train_loss'][-1]:.4f}\n"
+        f"Final Validation Loss: {history['val_loss'][-1]:.4f}\n"
+        f"Best Training Loss: {min(history['train_loss']):.4f}\n"
+        f"Best Validation Loss: {min(history['val_loss']):.4f}\n"
+        f"Best Batch Loss: {min(history['batch_losses']):.4f}"
+    )
+    fig.text(0.95, 0.05, stats_text, fontsize=10, ha='right', 
+             bbox=dict(facecolor='white', alpha=0.8))
+    
+    # Adjust layout to prevent overlap
+    plt.tight_layout()
+    
+    # Save plot if path is provided
+    if save_path:
+        plt.savefig(save_path, dpi=300, bbox_inches='tight')
+        print(f"Plot saved to {save_path}")
+    
+    # Show plot if requested
+    if show_plot:
+        plt.show()
+    else:
+        plt.close()
+
 
 # Usage example:
 if __name__ == "__main__":
@@ -278,8 +350,8 @@ if __name__ == "__main__":
     # Parameters
     patch_size = 256
     version = 0
-    batch_size = 32
-    num_epochs = 10
+    batch_size = 48
+    num_epochs = 8
     device = torch.device(hw)
 
     # Paths
@@ -315,4 +387,8 @@ if __name__ == "__main__":
 
     # Save model
     model_name = f"model__{patch_size}_{batch_size}_{version}.pth"
-    torch.save(model.state_dict(), os.path.join("Model", model_name))
+    torch.save(model.state_dict(), os.path.join("Models", model_name))
+    plot_training_history(
+    history,
+    save_path=f'training_history_{patch_size}_{batch_size}_{version}.png'
+)
