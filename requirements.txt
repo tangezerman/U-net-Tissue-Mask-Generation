@@ -1,0 +1,10 @@
+matplotlib==3.10.0
+numpy==2.2.2
+opencv_python==4.11.0.86
+openslide_python==1.4.1
+pandas==2.2.3
+psutil==6.1.1
+tensorflow==2.18.0
+torch==2.5.1+cu124
+torchvision==0.20.1+cu124
+tqdm==4.67.1
