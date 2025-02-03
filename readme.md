@@ -5,4 +5,16 @@ The model architecture uses weights of VGG 16 trained on IMAGENET.
 
 The trained model is under Models directory. You can extract it into the same directory for testing purposes.
 
-When creating patches, `multithreaded_patches.py` utilizes concurrency to dramatically speed up the process by x100 
+When creating patches, `multithreaded_patches.py` utilizes multiple parallel python processes to speed up the process.
+
+![Training history](image-1.png)
+
+Training took 8 epochs with a batch size of 48 on a GTX 1070 on pytorch. 
+
+## Sample predictions for patch size 256
+![alt text](sample_predictions_256_48_0.png)
+![alt text](pred.png)
+
+## Validation set results
+
+![alt text](image-2.png)
