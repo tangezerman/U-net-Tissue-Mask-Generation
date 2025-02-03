@@ -7,14 +7,20 @@ The trained model is under Models directory. You can extract it into the same di
 
 When creating patches, `multithreaded_patches.py` utilizes multiple parallel python processes to speed up the process.
 
-![Training history](image-1.png)
+![Training history][history]
 
 Training took 8 epochs with a batch size of 48 on a GTX 1070 on pytorch. 
 
 ## Sample predictions for patch size 256
-![sample_predictions_256_48_0.png](sample_predictions_256_48_0.png)
-![sample_predictions_256_48_0.png](pred.png)
+![sample_predictions_256_48_0.png][pred1]
+![sample_predictions_256_48_0.png][pred2]
 
 ## Validation set results
 
-![Results](image-2.png)
+![Results][def]
+
+
+[history]: image-1.png
+[pred1]: sample_predictions_256_48_0.png
+[pred2]: pred.png
+[def]: image-2.png
