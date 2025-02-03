@@ -12,9 +12,9 @@ When creating patches, `multithreaded_patches.py` utilizes multiple parallel pyt
 Training took 8 epochs with a batch size of 48 on a GTX 1070 on pytorch. 
 
 ## Sample predictions for patch size 256
-![alt text](sample_predictions_256_48_0.png)
-![alt text](pred.png)
+![sample_predictions_256_48_0.png](sample_predictions_256_48_0.png)
+![sample_predictions_256_48_0.png](pred.png)
 
 ## Validation set results
 
-![alt text](image-2.png)
+![Results](image-2.png)
