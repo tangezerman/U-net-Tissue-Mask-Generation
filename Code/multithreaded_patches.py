@@ -1,4 +1,5 @@
 import csv
+import multiprocessing
 import psutil
 from tqdm import tqdm
 import xml.etree.ElementTree as ET
@@ -30,6 +31,15 @@ if hasattr(os, 'add_dll_directory'):
 else:
     import openslide
 
+def get_cores() -> int :
+    try:
+
+        logical_cores = (multiprocessing.cpu_count())//2
+        return logical_cores
+    except Exception:
+        return 2
+
+    
 def get_data_list():
     full_data_lists = []
     for file_name in ["train", "val", "test"]:
@@ -162,6 +172,7 @@ def parse(file_info, folder, index, patch_size, lock):
                 pass
 
 def process_split(split_files, split_name, shared_index, skipped_files, patch_size, lock):
+    workers = get_cores()
     os.makedirs(os.path.join(main_folder, split_name, "masks"), exist_ok=True)
     os.makedirs(os.path.join(main_folder, split_name, "images"), exist_ok=True)
 
@@ -173,7 +184,7 @@ def process_split(split_files, split_name, shared_index, skipped_files, patch_si
         current_index = shared_index.value
         files_to_process = split_files[:limit - current_index]
 
-    with ProcessPoolExecutor(max_workers=8) as executor:
+    with ProcessPoolExecutor(max_workers=workers) as executor:
         futures = []
         for i, file in enumerate(files_to_process):
             futures.append(executor.submit(parse, file, split_name, current_index + i, patch_size, lock))
