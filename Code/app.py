@@ -123,40 +123,63 @@ class SegmentationApp:
             pixel_accuracy = np.mean((binary_mask > 127) == (mask_np > 0.5))
 
             # Create visualization
-            fig, axes = plt.subplots(3, 2, figsize=(10, 15))
+            fig = plt.figure(figsize=(12, 14))
 
-            # First row
-            axes[0, 0].imshow(image_np)
-            axes[0, 0].set_title(
-                f"Original Image\n{self.image_files[image_index]}")
-            axes[0, 0].axis("off")
+            # Create 2x2 grid for the main images
+            ax1 = plt.subplot(3, 2, 1)
+            plt.imshow(image_np)
+            plt.title(f"Original Image\n{self.image_files[image_index]}")
+            ax1.set_xticks([])
+            ax1.set_yticks([])
+            for spine in ax1.spines.values():
+                spine.set_visible(True)
+                spine.set_color("black")
+                spine.set_linewidth(2)
 
-            axes[0, 1].imshow(mask_np, cmap="gray")
-            axes[0, 1].set_title("Ground Truth")
-            axes[0, 1].axis("off")
+            ax2 = plt.subplot(3, 2, 2)
+            plt.imshow(mask_np, cmap="gray")
+            plt.title("Ground Truth")
+            ax2.set_xticks([])
+            ax2.set_yticks([])
+            for spine in ax2.spines.values():
+                spine.set_visible(True)
+                spine.set_color("black")
+                spine.set_linewidth(2)
 
-            # Second row
-            axes[1, 0].imshow(prediction, cmap="gray", vmin=0, vmax=1)
-            axes[1, 0].set_title("Raw Prediction")
-            axes[1, 0].axis("off")
+            ax3 = plt.subplot(3, 2, 3)
+            plt.imshow(prediction, cmap="gray", vmin=0, vmax=1)
+            plt.title("Raw Prediction")
+            ax3.set_xticks([])
+            ax3.set_yticks([])
+            for spine in ax3.spines.values():
+                spine.set_visible(True)
+                spine.set_color("black")
+                spine.set_linewidth(2)
 
-            axes[1, 1].imshow(mask_np, cmap="gray")
-            axes[1, 1].set_title("Ground Truth (Binary)")
-            axes[1, 1].axis("off")
+            ax4 = plt.subplot(3, 2, 4)
+            plt.imshow(binary_mask, cmap="gray")
+            plt.title(f"Prediction (Binary)\nThreshold: {threshold:.2f}")
+            ax4.set_xticks([])
+            ax4.set_yticks([])
+            for spine in ax4.spines.values():
+                spine.set_visible(True)
+                spine.set_color("black")
+                spine.set_linewidth(2)
 
-            # Third row
-            axes[2, 0].imshow(binary_mask, cmap="gray")
-            axes[2, 0].set_title(
-                f"Prediction (Binary)\nThreshold: {threshold:.2f}")
-            axes[2, 0].axis("off")
-
-            # Overlay comparison
+            # Create overlay image in the center of the bottom row
+            ax5 = plt.subplot(3, 1, 3)
             overlay = np.zeros((*prediction.shape, 3))
             overlay[:, :, 0] = mask_np  # Ground truth in red
             overlay[:, :, 1] = binary_mask / 255.0  # Prediction in green
-            axes[2, 1].imshow(overlay)
-            axes[2, 1].set_title("Overlay (GT=Red, Pred=Green)")
-            axes[2, 1].axis("off")
+            plt.imshow(overlay)
+            plt.title("Overlay Comparison (GT=Red, Pred=Green)",
+                    fontsize=12, weight="bold")
+            ax5.set_xticks([])
+            ax5.set_yticks([])
+            for spine in ax5.spines.values():
+                spine.set_visible(True)
+                spine.set_color("black")
+                spine.set_linewidth(2)
 
             plt.tight_layout()
 
@@ -172,8 +195,8 @@ class SegmentationApp:
             stats_text = f"""
             **Model Performance Metrics**
             
-            - IoU Score: {iou_score:.4f}
-            - Pixel Accuracy: {pixel_accuracy:.4f}
+            - IoU(Intersection over Union) Score: {iou_score:.4f} (shown with yellow)
+            - Pixel Accuracy: {pixel_accuracy:.4f} (binary pixel classification accuracy)
             """
 
             return result_image, stats_text
@@ -282,6 +305,8 @@ def create_gradio_interface(model_path: str, base_data_path: str, patch_size: in
                     with gr.Row():
                         prev_btn = gr.Button("← Previous")
                         next_btn = gr.Button("Next →")
+                    gr.Markdown("Samples are randomly selected from the dataset; hence, perfect accuracy/IoU scores typically occur when patches are taken from tissue centers (entire patch is tissue)."
+                                )
 
                 with gr.Column():
                     output_image = gr.Image(label="Prediction Results")
@@ -394,8 +419,8 @@ if __name__ == "__main__":
     batch_size = 48
 
     # Paths
-    base_data_path = f"Data/Data_{patch_size}_{version}"
-    model_path = f"Models/model__{patch_size}_{batch_size}_{version}.pth"
+    base_data_path = "Data/hf_Data_256_0"
+    model_path = "Models/model__256_48_0.pth"
 
     # Create and launch interface
     interface = create_gradio_interface(
