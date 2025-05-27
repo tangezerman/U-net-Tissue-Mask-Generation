@@ -1,5 +1,4 @@
 import torch
-import torch.nn as nn
 import gradio as gr
 import numpy as np
 from PIL import Image
@@ -7,8 +6,6 @@ import matplotlib.pyplot as plt
 import io
 import os
 from torchmodel import TLUNet, get_hw, ImageMaskDataset
-from torch.utils.data import DataLoader
-import torchvision.transforms as transforms
 
 
 class SegmentationApp:
