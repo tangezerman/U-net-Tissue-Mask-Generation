@@ -6,6 +6,7 @@ import matplotlib.pyplot as plt
 import io
 import os
 from torchmodel import TLUNet, get_hw, ImageMaskDataset
+import torchvision.transforms as transforms
 
 
 class SegmentationApp:
@@ -49,6 +50,12 @@ class SegmentationApp:
         self.current_split = "val"
         self.update_current_split("val")
 
+        # Initialize transform for custom images
+        self.transform = transforms.Compose([
+            transforms.Resize((patch_size, patch_size)),
+            transforms.ToTensor(),
+        ])
+
     def update_current_split(self, split: str):
         """Update the current split and associated data"""
         self.current_split = split
@@ -87,6 +94,116 @@ class SegmentationApp:
 
         image_tensor, mask_tensor = self.current_dataset[image_index]
         return image_tensor, mask_tensor
+
+    def predict_custom_image(self, uploaded_image, threshold: float = 0.5):
+        """Make prediction on a custom uploaded image"""
+        try:
+            if uploaded_image is None:
+                return None, "Please upload an image first."
+
+            # Convert PIL Image to tensor
+            if isinstance(uploaded_image, str):
+                image_pil = Image.open(uploaded_image).convert("RGB")
+            else:
+                image_pil = uploaded_image.convert("RGB")
+            
+            # Apply transforms
+            image_tensor = self.transform(image_pil)
+            
+            # Add batch dimension and move to device
+            input_tensor = image_tensor.unsqueeze(0).to(self.device)
+
+            # Make prediction
+            with torch.no_grad():
+                output = self.model(input_tensor)
+                # Remove batch and channel dims
+                prediction = output.cpu().numpy()[0, 0]
+
+            # Convert tensor to numpy for visualization
+            image_np = image_tensor.permute(1, 2, 0).numpy()
+
+            # Apply threshold to prediction
+            binary_mask = (prediction > threshold).astype(np.uint8) * 255
+
+            # Create visualization
+            fig = plt.figure(figsize=(12, 8))
+
+            # Original image
+            ax1 = plt.subplot(2, 2, 1)
+            plt.imshow(image_np)
+            plt.title("Original Image")
+            ax1.set_xticks([])
+            ax1.set_yticks([])
+            for spine in ax1.spines.values():
+                spine.set_visible(True)
+                spine.set_color("black")
+                spine.set_linewidth(2)
+
+            # Raw prediction
+            ax2 = plt.subplot(2, 2, 2)
+            plt.imshow(prediction, cmap="gray", vmin=0, vmax=1)
+            plt.title("Raw Prediction")
+            ax2.set_xticks([])
+            ax2.set_yticks([])
+            for spine in ax2.spines.values():
+                spine.set_visible(True)
+                spine.set_color("black")
+                spine.set_linewidth(2)
+
+            # Binary prediction
+            ax3 = plt.subplot(2, 2, 3)
+            plt.imshow(binary_mask, cmap="gray")
+            plt.title(f"Binary Prediction\nThreshold: {threshold:.2f}")
+            ax3.set_xticks([])
+            ax3.set_yticks([])
+            for spine in ax3.spines.values():
+                spine.set_visible(True)
+                spine.set_color("black")
+                spine.set_linewidth(2)
+
+            # Overlay
+            ax4 = plt.subplot(2, 2, 4)
+            overlay = image_np.copy()
+            # Create mask for predicted tissue areas
+            tissue_mask = binary_mask > 127
+            # Apply green tint to predicted tissue areas
+            overlay[tissue_mask, 1] = 1.0  # Set green channel to max for tissue areas
+            plt.imshow(overlay)
+            plt.title("Overlay (Predicted Tissue in Green)")
+            ax4.set_xticks([])
+            ax4.set_yticks([])
+            for spine in ax4.spines.values():
+                spine.set_visible(True)
+                spine.set_color("black")
+                spine.set_linewidth(2)
+
+            plt.tight_layout()
+
+            # Convert to image
+            buf = io.BytesIO()
+            plt.savefig(buf, format="png", dpi=150, bbox_inches="tight")
+            buf.seek(0)
+            plt.close()
+
+            result_image = Image.open(buf)
+
+            # Statistics
+            tissue_percentage = (binary_mask > 127).sum() / (binary_mask.shape[0] * binary_mask.shape[1]) * 100
+            mean_confidence = np.mean(prediction)
+            
+            stats_text = f"""
+            **Custom Image Prediction Results**
+            
+            - Tissue Percentage: {tissue_percentage:.2f}%
+            - Mean Prediction Confidence: {mean_confidence:.4f}
+            - Threshold Used: {threshold:.2f}
+            - Image Size: {image_pil.size[0]} x {image_pil.size[1]} (resized to {self.patch_size} x {self.patch_size})
+            """
+
+            return result_image, stats_text
+
+        except Exception as e:
+            return None, f"Error during prediction: {str(e)}"
 
     def predict_sample(self, split: str, image_index: int, threshold: float = 0.5):
         """Make prediction on a sample from the specified split"""
@@ -168,9 +285,9 @@ class SegmentationApp:
 
             # Create overlay image in the center of the bottom row
             ax5 = plt.subplot(3, 1, 3)
-            overlay = np.zeros((*prediction.shape, 3))
+            overlay = np.zeros((prediction.shape[0], prediction.shape[1], 3))
             overlay[:, :, 0] = mask_np  # Ground truth in red
-            overlay[:, :, 1] = binary_mask / 255.0  # Prediction in green
+            overlay[:, :, 1] = (binary_mask > 127).astype(np.float32)  # Prediction in green
             plt.imshow(overlay)
             plt.title("Overlay Comparison (GT=Red, Pred=Green)",
                     fontsize=12, weight="bold")
@@ -195,7 +312,7 @@ class SegmentationApp:
             stats_text = f"""
             **Model Performance Metrics**
             
-            - IoU(Intersection over Union) Score: {iou_score:.4f} (shown with yellow)
+            - IoU(Intersection over Union) Score: {iou_score:.4f}
             - Pixel Accuracy: {pixel_accuracy:.4f} (binary pixel classification accuracy)
             """
 
@@ -353,6 +470,40 @@ def create_gradio_interface(model_path: str, base_data_path: str, patch_size: in
                 fn=lambda s, x: update_dropdown(s, x, "next"),
                 inputs=[split_selector, image_dropdown],
                 outputs=[image_dropdown]
+            )
+
+        with gr.Tab("Custom Upload"):
+            with gr.Row():
+                with gr.Column():
+                    upload_image = gr.Image(
+                        label="Upload Custom Slide Image",
+                        type="pil",
+                        height=300
+                    )
+                    
+                    threshold_slider_custom = gr.Slider(
+                        minimum=0.1, maximum=0.9, value=0.5, step=0.05,
+                        label="Prediction Threshold"
+                    )
+                    
+                    predict_custom_btn = gr.Button("Predict Custom Image", variant="primary")
+                    
+                    gr.Markdown("""
+                    **Instructions:**
+                    - Upload any slide image (PNG, JPG, JPEG)
+                    - The image will be automatically resized to 256x256 pixels
+                    - Adjust the threshold to fine-tune the tissue detection
+                    - Green overlay shows predicted tissue regions
+                    """)
+
+                with gr.Column():
+                    custom_output_image = gr.Image(label="Custom Prediction Results")
+                    custom_stats_output = gr.Markdown()
+
+            predict_custom_btn.click(
+                fn=app.predict_custom_image,
+                inputs=[upload_image, threshold_slider_custom],
+                outputs=[custom_output_image, custom_stats_output]
             )
 
         with gr.Tab("Batch Evaluation"):
