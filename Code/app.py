@@ -106,10 +106,10 @@ class SegmentationApp:
                 image_pil = Image.open(uploaded_image).convert("RGB")
             else:
                 image_pil = uploaded_image.convert("RGB")
-            
+
             # Apply transforms
             image_tensor = self.transform(image_pil)
-            
+
             # Add batch dimension and move to device
             input_tensor = image_tensor.unsqueeze(0).to(self.device)
 
@@ -166,10 +166,11 @@ class SegmentationApp:
             overlay = image_np.copy()
             # Create mask for predicted tissue areas
             tissue_mask = binary_mask > 127
-            # Apply green tint to predicted tissue areas
-            overlay[tissue_mask, 1] = 1.0  # Set green channel to max for tissue areas
+            # Show prediction as semi-transparent white overlay
+            overlay[tissue_mask] = overlay[tissue_mask] * 0.5 + \
+                np.array([1, 1, 1]) * 0.3  # 50% original + 50% white
             plt.imshow(overlay)
-            plt.title("Overlay (Predicted Tissue in Green)")
+            plt.title("Overlay")
             ax4.set_xticks([])
             ax4.set_yticks([])
             for spine in ax4.spines.values():
@@ -188,9 +189,10 @@ class SegmentationApp:
             result_image = Image.open(buf)
 
             # Statistics
-            tissue_percentage = (binary_mask > 127).sum() / (binary_mask.shape[0] * binary_mask.shape[1]) * 100
+            tissue_percentage = (binary_mask > 127).sum(
+            ) / (binary_mask.shape[0] * binary_mask.shape[1]) * 100
             mean_confidence = np.mean(prediction)
-            
+
             stats_text = f"""
             **Custom Image Prediction Results**
             
@@ -287,10 +289,11 @@ class SegmentationApp:
             ax5 = plt.subplot(3, 1, 3)
             overlay = np.zeros((prediction.shape[0], prediction.shape[1], 3))
             overlay[:, :, 0] = mask_np  # Ground truth in red
-            overlay[:, :, 1] = (binary_mask > 127).astype(np.float32)  # Prediction in green
+            overlay[:, :, 1] = (binary_mask > 127).astype(
+                np.float32)  # Prediction in green
             plt.imshow(overlay)
             plt.title("Overlay Comparison (GT=Red, Pred=Green)",
-                    fontsize=12, weight="bold")
+                      fontsize=12, weight="bold")
             ax5.set_xticks([])
             ax5.set_yticks([])
             for spine in ax5.spines.values():
@@ -480,14 +483,15 @@ def create_gradio_interface(model_path: str, base_data_path: str, patch_size: in
                         type="pil",
                         height=300
                     )
-                    
+
                     threshold_slider_custom = gr.Slider(
                         minimum=0.1, maximum=0.9, value=0.5, step=0.05,
                         label="Prediction Threshold"
                     )
-                    
-                    predict_custom_btn = gr.Button("Predict Custom Image", variant="primary")
-                    
+
+                    predict_custom_btn = gr.Button(
+                        "Predict Custom Image", variant="primary")
+
                     gr.Markdown("""
                     **Instructions:**
                     - Upload any slide image (PNG, JPG, JPEG)
@@ -497,7 +501,8 @@ def create_gradio_interface(model_path: str, base_data_path: str, patch_size: in
                     """)
 
                 with gr.Column():
-                    custom_output_image = gr.Image(label="Custom Prediction Results")
+                    custom_output_image = gr.Image(
+                        label="Custom Prediction Results")
                     custom_stats_output = gr.Markdown()
 
             predict_custom_btn.click(
